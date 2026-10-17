@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1792195404 source:d:\viernes\proyecto\main.cpp
+	<iostream>
+	"gui.h"
+
+1792195148 d:\viernes\proyecto\gui.h
+
