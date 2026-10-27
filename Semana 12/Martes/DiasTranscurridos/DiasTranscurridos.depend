@@ -1,0 +1,10 @@
+# depslib dependency file v1.0
+1793141519 source:/home/angel/UTN/programacion1-20262c-noche-presencial/Semana 12/Martes/DiasTranscurridos/funciones.cpp
+	"funciones.h"
+
+1793141294 /home/angel/UTN/programacion1-20262c-noche-presencial/Semana 12/Martes/DiasTranscurridos/funciones.h
+
+1793141234 source:/home/angel/UTN/programacion1-20262c-noche-presencial/Semana 12/Martes/DiasTranscurridos/main.cpp
+	<iostream>
+	"funciones.h"
+
