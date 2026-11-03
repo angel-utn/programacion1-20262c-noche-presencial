@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordenamiento por selección</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Fira+Sans:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: columna de lectura de ~68ch con bandas anchas para los diagramas; el vector es el protagonista.
+   Semántica fija de color: i = azul, j = violeta, posMin = ámbar, zona ordenada = verde. */
+:root {
+  --bg: #f3f5f9;
+  --surface: #ffffff;
+  --ink: #172030;
+  --muted: #586579;
+  --line: #d5dbe5;
+  --accent: #1f5fbf;      /* i */
+  --accent-bg: #e1ebfb;
+  --scan: #7140c9;        /* j */
+  --min: #8a5300;         /* posMin (texto) */
+  --min-bg: #ffe4ad;
+  --ok: #1b7a50;          /* zona ordenada */
+  --ok-bg: #d3efe1;
+  --font-display: "Fira Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-body: "Fira Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Fira Code", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --cell: 48px;
+  --gap: 8px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131b; --surface: #161d28; --ink: #e5eaf2; --muted: #9ba7b8; --line: #2a3443;
+    --accent: #78a8ff; --accent-bg: #1a2b48; --scan: #b597ff;
+    --min: #ffc96a; --min-bg: #4a3411; --ok: #62d39c; --ok-bg: #143826;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131b; --surface: #161d28; --ink: #e5eaf2; --muted: #9ba7b8; --line: #2a3443;
+  --accent: #78a8ff; --accent-bg: #1a2b48; --scan: #b597ff;
+  --min: #ffc96a; --min-bg: #4a3411; --ok: #62d39c; --ok-bg: #143826;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.6;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+.read { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+.muted { color: var(--muted); }
+
+/* Encabezado */
+header { padding: 48px 0 32px; border-bottom: 1px solid var(--line); }
+.eyebrow { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.head-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; }
+.head-grid .text { display: grid; gap: 14px; }
+.lede { font-size: 1.2rem; color: var(--ink); }
+.lede strong { color: var(--accent); }
+@media (max-width: 760px) { .head-grid { grid-template-columns: 1fr; gap: 24px; } }
+
+/* Sección */
+section { padding: 44px 0; border-bottom: 1px solid var(--line); }
+section > .wrap { display: grid; gap: 20px; }
+.sec-num { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); }
+.sec-head { display: grid; gap: 4px; }
+
+/* Celdas del vector */
+.vec { display: flex; gap: var(--gap); align-items: flex-end; }
+.cellwrap { display: grid; justify-items: center; gap: 4px; width: var(--cell); }
+.tags { height: 20px; display: flex; gap: 2px; align-items: flex-end; }
+.tag { font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600; padding: 0 4px; border-radius: 4px; line-height: 16px; color: var(--surface); }
+.tag.i { background: var(--accent); }
+.tag.j { background: var(--scan); }
+.tag.m { background: var(--min); }
+.cell {
+  width: var(--cell); height: var(--cell);
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-weight: 600; font-size: 1.1rem;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color .25s, border-color .25s, transform .25s;
+}
+.idx { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+.cell.sorted { background: var(--ok-bg); border-color: var(--ok); color: var(--ink); }
+.cell.is-i { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg); }
+.cell.is-j { border-color: var(--scan); border-style: dashed; }
+.cell.is-min { background: var(--min-bg); border-color: var(--min); }
+.cell.dim { opacity: 0.45; }
+.cell.swapped { transform: translateY(-4px); }
+
+/* Héroe: zonas */
+.hero-fig { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 12px; overflow-x: auto; }
+.zones { display: flex; gap: var(--gap); font-size: 0.8rem; font-weight: 600; }
+.zone { border-top: 3px solid; padding-top: 4px; }
+.zone.ok { border-color: var(--ok); color: var(--ok); }
+.zone.no { border-color: var(--muted); color: var(--muted); }
+
+/* Tres movimientos */
+.moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: mv; }
+.move { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.move .n { font-family: var(--font-mono); font-weight: 600; font-size: 0.85rem; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-bg); color: var(--accent); }
+.move p { font-size: 0.96rem; }
+.loop-note { display: flex; gap: 10px; align-items: baseline; font-size: 0.96rem; color: var(--muted); }
+@media (max-width: 760px) { .moves { grid-template-columns: 1fr; } }
+
+/* Variables */
+.vars { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.var { border-left: 4px solid var(--line); padding: 6px 0 6px 14px; display: grid; gap: 2px; }
+.var b { font-family: var(--font-mono); font-size: 1.05rem; }
+.var.i { border-color: var(--accent); } .var.i b { color: var(--accent); }
+.var.j { border-color: var(--scan); } .var.j b { color: var(--scan); }
+.var.m { border-color: var(--min); } .var.m b { color: var(--min); }
+.var span { font-size: 0.93rem; color: var(--muted); }
+
+/* Pasadas */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.88rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 16px; height: 16px; border-radius: 4px; border: 2px solid; display: inline-block; }
+.sw.ok { background: var(--ok-bg); border-color: var(--ok); }
+.sw.i { background: var(--surface); border-color: var(--accent); }
+.sw.m { background: var(--min-bg); border-color: var(--min); }
+.sw.j { background: var(--surface); border-color: var(--scan); border-style: dashed; }
+.passes { display: grid; gap: 14px; }
+.pass { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; grid-template-columns: 120px auto 1fr; gap: 18px; align-items: center; }
+.pass .label { display: grid; gap: 2px; }
+.pass .label b { font-size: 1rem; }
+.pass .label span { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); }
+.pass .fig { overflow-x: auto; }
+.pass .fig svg { display: block; overflow: visible; }
+.pass .fig svg path { fill: none; stroke: var(--min); stroke-width: 2; }
+.pass .fig svg polygon { fill: var(--min); }
+.pass .fig svg text { fill: var(--muted); font-family: var(--font-body); font-size: 12px; }
+.pass .desc { font-size: 0.95rem; }
+.pass.final { background: var(--ok-bg); border-color: var(--ok); }
+@media (max-width: 860px) { .pass { grid-template-columns: 1fr; gap: 10px; } }
+
+/* Simulador */
+.sim { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 18px; }
+.sim-top { display: grid; grid-template-columns: 1fr 330px; gap: 20px; }
+@media (max-width: 860px) { .sim-top { grid-template-columns: 1fr; } }
+.sim-head { display: flex; justify-content: flex-end; margin-bottom: -6px; }
+.toggle::before { content: "</>"; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); margin-right: 8px; }
+.sim-top.no-code { grid-template-columns: 1fr; }
+.sim-top.no-code .pseudo { display: none; }
+.stage { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.stage .vecbox { overflow-x: auto; padding: 4px 2px 8px; }
+.msg { min-height: 3.4em; font-size: 1rem; background: var(--bg); border-radius: 8px; padding: 10px 14px; border-left: 4px solid var(--accent); }
+.counters { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 0.9rem; color: var(--muted); }
+.counters b { font-family: var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.pseudo { font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.75; background: var(--bg); border-radius: 10px; padding: 12px 0; margin: 0; overflow-x: auto; }
+.pseudo div { padding: 0 14px; white-space: pre; border-left: 3px solid transparent; }
+.pseudo div.on { background: var(--accent-bg); border-left-color: var(--accent); }
+.pseudo .kw { color: var(--accent); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button {
+  font: inherit; font-size: 0.93rem; font-weight: 500;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 8px; padding: 8px 14px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.progress { flex: 1 1 120px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; min-width: 100px; }
+.progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.custom { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 14px; }
+.custom label { font-size: 0.9rem; color: var(--muted); width: 100%; }
+.custom input { font-family: var(--font-mono); font-size: 0.95rem; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); flex: 1 1 220px; }
+.err { color: #c0392b; font-size: 0.88rem; width: 100%; }
+:root[data-theme="dark"] .err { color: #ff8a7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .err { color: #ff8a7a; } }
+
+/* Intercambio */
+.swapfig { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.swapstep { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; }
+.swapstep code { font-weight: 600; }
+.boxes { display: flex; gap: 10px; align-items: end; }
+.box { display: grid; gap: 2px; justify-items: center; }
+.box .cell { width: 44px; height: 44px; font-size: 1rem; }
+.box small { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+.box.aux .cell { border-style: dotted; }
+.box .cell.chg { background: var(--min-bg); border-color: var(--min); }
+@media (max-width: 760px) { .swapfig { grid-template-columns: 1fr; } }
+
+/* Costos */
+.cost { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+@media (max-width: 760px) { .cost { grid-template-columns: 1fr; } }
+.formula { font-family: var(--font-mono); font-size: 1.15rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+td { font-family: var(--font-mono); }
+.facts { display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.facts li { padding-left: 18px; position: relative; }
+.facts li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+
+/* Errores */
+.errors { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.error { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--min); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.error p { font-size: 0.94rem; }
+.error .fix { color: var(--ok); font-size: 0.9rem; font-weight: 500; }
+
+/* Variantes */
+.variants { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .variants { grid-template-columns: 1fr; } }
+.variant { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 6px; background: var(--surface); }
+
+/* Código y diagrama */
+.cd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .cd { grid-template-columns: 1fr; } }
+.code { font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.65; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 0; overflow-x: auto; position: sticky; top: 16px; }
+.code .kw { color: var(--accent); font-weight: 600; }
+.code .cm { color: var(--muted); font-style: italic; }
+.code .st { color: var(--ok); }
+.diagram { margin: 0; background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.diagram img { display: block; width: 100%; max-width: 100%; height: auto; }
+
+footer { padding: 28px 0 48px; font-size: 0.88rem; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap head-grid">
+    <div class="text">
+      <div class="eyebrow">Programación I · Ordenamiento de vectores</div>
+      <h1>Ordenamiento por selección</h1>
+      <p class="lede">Para cada posición del vector, <strong>buscá el menor</strong> de los valores que todavía no están ordenados y <strong>llevalo a esa posición</strong> con un intercambio.</p>
+      <p class="muted">Repetís eso de izquierda a derecha. Cada vuelta deja un elemento más en su lugar definitivo, así que la parte ordenada crece de a uno hasta cubrir todo el vector.</p>
+    </div>
+    <figure class="hero-fig" aria-label="Vector a mitad del ordenamiento">
+      <div class="vec" id="heroVec"></div>
+      <div class="zones">
+        <div class="zone ok" style="width: calc(var(--cell) * 2 + var(--gap));">ordenado</div>
+        <div class="zone no" style="width: calc(var(--cell) * 4 + var(--gap) * 3);">sin ordenar: acá se busca el menor</div>
+      </div>
+      <p class="muted" style="font-size:.88rem">Estado después de dos pasadas. El próximo paso busca el menor entre las posiciones 2 y 5 (es el <b class="mono">14</b>) y lo cambia con el <b class="mono">31</b>.</p>
+    </figure>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">01</span><h2>La idea en tres movimientos</h2></div>
+    <div class="moves">
+      <div class="move">
+        <div class="n">1</div>
+        <h3>Elegir el lugar</h3>
+        <p>Fijás una posición <b class="mono" style="color:var(--accent)">i</b>: es el casillero que vas a completar en esta pasada. Arranca en 0.</p>
+      </div>
+      <div class="move">
+        <div class="n">2</div>
+        <h3>Buscar el menor</h3>
+        <p>Recorrés con <b class="mono" style="color:var(--scan)">j</b> desde <span class="mono">i+1</span> hasta el final, y guardás en <b class="mono" style="color:var(--min)">posMin</b> la <em>posición</em> del valor más chico que vas encontrando.</p>
+      </div>
+      <div class="move">
+        <div class="n">3</div>
+        <h3>Intercambiar</h3>
+        <p>Cambiás <span class="mono">v[i]</span> con <span class="mono">v[posMin]</span>. El menor queda en la posición <span class="mono">i</span> y ya no se vuelve a tocar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Paso a paso con un ejemplo</h2></div>
+    <p class="read">Ordenamos de menor a mayor el vector <span class="mono">{29, 10, 14, 37, 13}</span>. Cada fila muestra el vector <em>antes</em> del intercambio de esa pasada.</p>
+    <div class="legend">
+      <span><i class="sw ok"></i>ya ordenado</span>
+      <span><i class="sw i"></i>posición i</span>
+      <span><i class="sw m"></i>menor encontrado (posMin)</span>
+      <span><i class="sw j"></i>j recorriendo (en el simulador)</span>
+    </div>
+    <div class="passes" id="passes"></div>
+  </div>
+</section>
+
+<section id="simulador">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Probalo vos</h2></div>
+    <p class="read">Avanzá de a un paso y mirá qué línea del código C++ se ejecuta. También podés usar las flechas ← y → del teclado.</p>
+    <div class="sim">
+      <div class="sim-head"><button type="button" id="bCode" class="toggle" aria-controls="pseudo" aria-expanded="false">Mostrar código C++</button></div>
+      <div class="sim-top no-code" id="simTop">
+        <div class="stage">
+          <div class="vecbox"><div class="vec" id="simVec" aria-live="polite"></div></div>
+          <div class="msg" id="simMsg"></div>
+          <div class="counters">
+            <span>Paso <b id="cStep">0</b> de <b id="cTotal">0</b></span>
+            <span>Comparaciones <b id="cComp">0</b></span>
+            <span>Intercambios que movieron datos <b id="cSwap">0</b></span>
+          </div>
+        </div>
+        <div class="pseudo" id="pseudo" aria-label="Código C++ del ordenamiento"></div>
+      </div>
+      <div class="controls">
+        <button id="bReset" type="button">Reiniciar</button>
+        <button id="bPrev" type="button">← Anterior</button>
+        <button id="bNext" type="button" class="primary">Siguiente →</button>
+        <button id="bPlay" type="button">Reproducir</button>
+        <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+      </div>
+      <form class="custom" id="customForm">
+        <label for="customInput">Probá con tu propio vector: entre 3 y 8 enteros separados por coma.</label>
+        <input id="customInput" type="text" value="29, 10, 14, 37, 13" autocomplete="off">
+        <button type="submit">Usar este vector</button>
+        <button type="button" id="bRandom">Vector al azar</button>
+        <div class="err" id="customErr" role="alert"></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">04</span><h2>El intercambio necesita una auxiliar</h2></div>
+    <p class="read">Si hacés <span class="mono">v[i] = v[posMin];</span> directamente, el operador de asignación pisa el valor que había en <span class="mono">v[i]</span> y se pierde. Por eso primero se guarda una copia en <span class="mono">aux</span>. Ejemplo de la pasada 1: <span class="mono">i = 0</span>, <span class="mono">posMin = 1</span>.</p>
+    <div class="swapfig">
+      <div class="swapstep">
+        <code>aux = v[i];</code>
+        <div class="boxes">
+          <div class="box"><div class="cell">29</div><small>v[0]</small></div>
+          <div class="box"><div class="cell">10</div><small>v[1]</small></div>
+          <div class="box aux"><div class="cell chg">29</div><small>aux</small></div>
+        </div>
+        <p class="muted" style="font-size:.9rem">Se guarda una copia del 29.</p>
+      </div>
+      <div class="swapstep">
+        <code>v[i] = v[posMin];</code>
+        <div class="boxes">
+          <div class="box"><div class="cell chg">10</div><small>v[0]</small></div>
+          <div class="box"><div class="cell">10</div><small>v[1]</small></div>
+          <div class="box aux"><div class="cell">29</div><small>aux</small></div>
+        </div>
+        <p class="muted" style="font-size:.9rem">El menor pasa a la posición i. Por un momento el 10 está dos veces.</p>
+      </div>
+      <div class="swapstep">
+        <code>v[posMin] = aux;</code>
+        <div class="boxes">
+          <div class="box"><div class="cell">10</div><small>v[0]</small></div>
+          <div class="box"><div class="cell chg">29</div><small>v[1]</small></div>
+          <div class="box aux"><div class="cell">29</div><small>aux</small></div>
+        </div>
+        <p class="muted" style="font-size:.9rem">El 29 vuelve al vector, en el lugar que dejó el menor.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Código y diagrama de flujo</h2></div>
+    <p class="read">El programa completo que ordena el vector del ejemplo y lo muestra, junto con su diagrama de flujo.</p>
+    <div class="cd">
+      <pre class="code" id="fullCode" aria-label="Programa completo en C++"><span class="cm">/**
+   Ordenamiento por selección.
+   Ordena de menor a mayor un vector de 5 enteros y lo muestra.
+
+   DE: vector de enteros (cargado en el programa)
+   DS: vector ordenado de menor a mayor
+   Estrategia: para cada posición i, buscar la posición del menor
+   entre i y el final, e intercambiarlo con v[i].
+*/</span>
+<span class="kw">#include</span> &lt;iostream&gt;
+<span class="kw">using</span> <span class="kw">namespace</span> std;
+
+<span class="kw">int</span> main(){
+   <span class="kw">const</span> <span class="kw">int</span> TAM = 5;
+   <span class="kw">int</span> v[TAM] = {29, 10, 14, 37, 13};
+   <span class="kw">int</span> i, j, posMin, aux;
+
+<span class="cm">   /// Ordenamiento</span>
+   <span class="kw">for</span>(i=0; i&lt;TAM-1; i++){
+      posMin = i;
+      <span class="kw">for</span>(j=i+1; j&lt;TAM; j++){
+         <span class="kw">if</span>(v[j] &lt; v[posMin]){
+            posMin = j;
+         }
+      }
+      aux = v[i];
+      v[i] = v[posMin];
+      v[posMin] = aux;
+   }
+
+<span class="cm">   /// Muestra del vector ordenado</span>
+   cout &lt;&lt; <span class="st">"Vector ordenado: "</span>;
+   <span class="kw">for</span>(i=0; i&lt;TAM; i++){
+      cout &lt;&lt; v[i] &lt;&lt; <span class="st">" "</span>;
+   }
+   cout &lt;&lt; endl;
+
+   <span class="kw">return</span> 0;
+}</pre>
+      <figure class="diagram">
+        <img src="OrdenamientoSeleccion.png" alt="Diagrama de flujo del ordenamiento por selección: dos ciclos for anidados, la decisión v[j] &lt; v[posMin] y el intercambio con aux.">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Programación I · UTN. El simulador sigue exactamente el código de la sección 03, con posiciones desde 0.</div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- utilidades de dibujo ---------- */
+  function cellHTML(value, idx, cls, tags) {
+    var t = (tags || []).map(function (k) {
+      var txt = k === "m" ? "min" : k;
+      return '<span class="tag ' + k + '">' + txt + "</span>";
+    }).join("");
+    return '<div class="cellwrap"><div class="tags">' + t + '</div><div class="cell ' + (cls || "") + '">' + value +
+      '</div><div class="idx">' + idx + "</div></div>";
+  }
+
+  /* ---------- héroe ---------- */
+  (function () {
+    var v = [8, 11, 31, 14, 26, 19];
+    document.getElementById("heroVec").innerHTML = v.map(function (x, k) {
+      var cls = k < 2 ? "sorted" : (k === 2 ? "is-i" : (k === 3 ? "is-min" : ""));
+      var tags = k === 2 ? ["i"] : (k === 3 ? ["m"] : []);
+      return cellHTML(x, k, cls, tags);
+    }).join("");
+  })();
+
+  /* ---------- pasadas estáticas ---------- */
+  (function () {
+    var v = [29, 10, 14, 37, 13];
+    var n = v.length;
+    var css = getComputedStyle(document.documentElement);
+    var W = parseInt(css.getPropertyValue("--cell"), 10) || 48;
+    var G = parseInt(css.getPropertyValue("--gap"), 10) || 8;
+    var html = "";
+    for (var i = 0; i < n - 1; i++) {
+      var pm = i;
+      for (var j = i + 1; j < n; j++) if (v[j] < v[pm]) pm = j;
+      var cells = v.map(function (x, k) {
+        var cls = k < i ? "sorted" : "";
+        var tags = [];
+        if (k === i) { cls += " is-i"; tags.push("i"); }
+        if (k === pm) { cls += " is-min"; tags.push("m"); }
+        return cellHTML(x, k, cls, tags);
+      }).join("");
+      var width = n * W + (n - 1) * G;
+      var svg;
+      if (pm !== i) {
+        var x1 = i * (W + G) + W / 2, x2 = pm * (W + G) + W / 2;
+        svg = '<svg width="' + width + '" height="26" aria-hidden="true">' +
+          '<path d="M' + x1 + " 24 Q " + (x1 + x2) / 2 + " -6 " + x2 + ' 24"/>' +
+          '<polygon points="' + (x1 - 4) + ",18 " + (x1 + 4) + ",18 " + x1 + ',26"/>' +
+          '<polygon points="' + (x2 - 4) + ",18 " + (x2 + 4) + ",18 " + x2 + ',26"/></svg>';
+      } else {
+        svg = '<svg width="' + width + '" height="26" aria-hidden="true"><text x="' + (i * (W + G)) + '" y="18">sin movimiento</text></svg>';
+      }
+      var range = "v[" + i + ".." + (n - 1) + "]";
+      var desc;
+      if (pm !== i) {
+        desc = "El menor de <span class=\"mono\">" + range + "</span> es <b class=\"mono\">" + v[pm] + "</b>, en la posición " + pm +
+          ". Se intercambia con <b class=\"mono\">" + v[i] + "</b>.";
+      } else {
+        desc = "El menor de <span class=\"mono\">" + range + "</span> es <b class=\"mono\">" + v[pm] +
+          "</b> y ya está en la posición " + i + ". El intercambio no mueve nada.";
+      }
+      desc += ' <span class="muted">' + (n - 1 - i) + " comparaciones.</span>";
+      html += '<div class="pass"><div class="label"><b>Pasada ' + (i + 1) + '</b><span>i = ' + i + ", posMin = " + pm +
+        '</span></div><div class="fig">' + svg + '<div class="vec">' + cells + '</div></div><p class="desc">' + desc + "</p></div>";
+      var a = v[i]; v[i] = v[pm]; v[pm] = a;
+    }
+    var fin = v.map(function (x, k) { return cellHTML(x, k, "sorted", []); }).join("");
+    html += '<div class="pass final"><div class="label"><b>Resultado</b><span>4 pasadas</span></div><div class="fig"><div class="vec">' +
+      fin + '</div></div><p class="desc">Vector ordenado con 10 comparaciones (4 + 3 + 2 + 1) y 3 intercambios que movieron datos.</p></div>';
+    document.getElementById("passes").innerHTML = html;
+  })();
+
+  /* ---------- simulador ---------- */
+  var K = function (w) { return "<span class=kw>" + w + "</span>"; };
+  var PSEUDO = [
+    K("for") + "(i=0; i&lt;TAM-1; i++){",
+    "   posMin = i;",
+    "   " + K("for") + "(j=i+1; j&lt;TAM; j++){",
+    "      " + K("if") + "(v[j] &lt; v[posMin]){",
+    "         posMin = j;",
+    "      }",
+    "   }",
+    "   aux = v[i];",
+    "   v[i] = v[posMin];",
+    "   v[posMin] = aux;",
+    "}"
+  ];
+  document.getElementById("pseudo").innerHTML = PSEUDO.map(function (l, k) {
+    return '<div data-l="' + k + '">' + l + "</div>";
+  }).join("");
+
+  function buildSteps(arr) {
+    var v = arr.slice(), n = v.length, steps = [], comps = 0, swaps = 0;
+    function push(o) {
+      o.v = v.slice(); o.comps = comps; o.swaps = swaps; steps.push(o);
+    }
+    push({ lines: [], i: null, j: null, pm: null, sorted: 0,
+      msg: "Vector inicial con TAM = " + n + " elementos. Todavía no hay nada ordenado." });
+    for (var i = 0; i < n - 1; i++) {
+      var pm = i;
+      push({ lines: [0, 1], i: i, j: null, pm: pm, sorted: i,
+        msg: "Pasada " + (i + 1) + ": vamos a completar la posición " + i + ". Por ahora el menor es v[" + i + "] = " + v[i] + ", así que posMin = " + i + "." });
+      for (var j = i + 1; j < n; j++) {
+        comps++;
+        var less = v[j] < v[pm];
+        push({ lines: [3], i: i, j: j, pm: pm, sorted: i,
+          msg: "¿v[" + j + "] = " + v[j] + " es menor que v[posMin] = " + v[pm] + "? " + (less ? "Sí." : "No, posMin sigue en " + pm + ".") });
+        if (less) {
+          pm = j;
+          push({ lines: [4], i: i, j: j, pm: pm, sorted: i,
+            msg: "Nuevo menor: posMin = " + j + " (valor " + v[j] + ")." });
+        }
+      }
+      if (pm !== i) {
+        var a = v[i]; v[i] = v[pm]; v[pm] = a; swaps++;
+        push({ lines: [7, 8, 9], i: i, j: null, pm: pm, sorted: i + 1, swapped: [i, pm],
+          msg: "Terminó el recorrido de j. Se intercambian v[" + i + "] y v[" + pm + "]: el " + v[i] + " queda fijo en la posición " + i + "." });
+      } else {
+        push({ lines: [7, 8, 9], i: i, j: null, pm: pm, sorted: i + 1,
+          msg: "Terminó el recorrido de j. El menor ya estaba en la posición " + i + ": el intercambio no cambia nada." });
+      }
+    }
+    push({ lines: [], i: null, j: null, pm: null, sorted: n,
+      msg: "Listo. " + comps + " comparaciones y " + swaps + " intercambios que movieron datos. La última posición quedó ordenada sola." });
+    return steps;
+  }
+
+  var steps = [], cur = 0, timer = null;
+  var elVec = document.getElementById("simVec"), elMsg = document.getElementById("simMsg");
+  var bPrev = document.getElementById("bPrev"), bNext = document.getElementById("bNext"), bPlay = document.getElementById("bPlay");
+
+  function render() {
+    var s = steps[cur];
+    elVec.innerHTML = s.v.map(function (x, k) {
+      var cls = [], tags = [];
+      if (k < s.sorted) cls.push("sorted");
+      if (k === s.i) { cls.push("is-i"); tags.push("i"); }
+      if (k === s.j) { cls.push("is-j"); tags.push("j"); }
+      if (k === s.pm && s.i !== null) { cls.push("is-min"); tags.push("m"); }
+      if (s.swapped && s.swapped.indexOf(k) >= 0) cls.push("swapped");
+      if (s.i !== null && s.j !== null && k > s.j) cls.push("dim");
+      return cellHTML(x, k, cls.join(" "), tags);
+    }).join("");
+    elMsg.textContent = s.msg;
+    document.getElementById("cStep").textContent = cur;
+    document.getElementById("cTotal").textContent = steps.length - 1;
+    document.getElementById("cComp").textContent = s.comps;
+    document.getElementById("cSwap").textContent = s.swaps;
+    document.getElementById("prog").style.width = (100 * cur / (steps.length - 1)) + "%";
+    Array.prototype.forEach.call(document.querySelectorAll("#pseudo div"), function (d) {
+      d.classList.toggle("on", s.lines.indexOf(+d.getAttribute("data-l")) >= 0);
+    });
+    bPrev.disabled = cur === 0;
+    bNext.disabled = cur === steps.length - 1;
+  }
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    bPlay.textContent = "Reproducir";
+  }
+  function load(arr) {
+    stop(); steps = buildSteps(arr); cur = 0; render();
+  }
+  function go(d) {
+    var nx = cur + d;
+    if (nx < 0 || nx >= steps.length) return false;
+    cur = nx; render(); return true;
+  }
+
+  bNext.addEventListener("click", function () { stop(); go(1); });
+  bPrev.addEventListener("click", function () { stop(); go(-1); });
+  document.getElementById("bReset").addEventListener("click", function () { stop(); cur = 0; render(); });
+  bPlay.addEventListener("click", function () {
+    if (timer) { stop(); return; }
+    if (cur === steps.length - 1) { cur = 0; render(); }
+    bPlay.textContent = "Pausa";
+    timer = setInterval(function () { if (!go(1)) stop(); }, 1000);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") { stop(); go(1); }
+    else if (e.key === "ArrowLeft") { stop(); go(-1); }
+  });
+
+  var input = document.getElementById("customInput"), err = document.getElementById("customErr");
+  document.getElementById("customForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var parts = input.value.split(/[,;\s]+/).filter(function (p) { return p !== ""; });
+    var ok = parts.every(function (p) { return /^-?\d{1,3}$/.test(p); });
+    if (!ok) { err.textContent = "Usá solo enteros de hasta 3 cifras, separados por coma (por ejemplo: 5, -2, 17)."; return; }
+    if (parts.length < 3 || parts.length > 8) { err.textContent = "Ingresaste " + parts.length + " números. Tienen que ser entre 3 y 8."; return; }
+    err.textContent = "";
+    load(parts.map(Number));
+  });
+  document.getElementById("bRandom").addEventListener("click", function () {
+    var arr = [];
+    for (var k = 0; k < 7; k++) arr.push(1 + Math.floor(Math.random() * 99));
+    input.value = arr.join(", ");
+    err.textContent = "";
+    load(arr);
+  });
+
+  var bCode = document.getElementById("bCode"), simTop = document.getElementById("simTop");
+  bCode.addEventListener("click", function () {
+    var hide = !simTop.classList.contains("no-code");
+    simTop.classList.toggle("no-code", hide);
+    bCode.setAttribute("aria-expanded", hide ? "false" : "true");
+    bCode.textContent = hide ? "Mostrar código C++" : "Ocultar código C++";
+  });
+
+  load([29, 10, 14, 37, 13]);
+})();
+</script>
+</body>
+</html>
