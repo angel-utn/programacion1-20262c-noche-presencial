@@ -1,0 +1,14 @@
+# depslib dependency file v1.0
+1794352578 source:/home/angel/UTN/programacion1-20262c-noche-presencial/Semana 14/Martes/Naipes/funciones.cpp
+	<iostream>
+	"funciones.h"
+
+1794352367 /home/angel/UTN/programacion1-20262c-noche-presencial/Semana 14/Martes/Naipes/funciones.h
+	<string>
+
+1794352599 source:/home/angel/UTN/programacion1-20262c-noche-presencial/Semana 14/Martes/Naipes/main.cpp
+	<iostream>
+	<cstdlib>
+	<ctime>
+	"funciones.h"
+
